@@ -45,7 +45,7 @@ clean full-screen road.
 
 ## Structure
 
-- `server.js` — zero-dependency static server (MIME + path safety).
+- `local-server.js` — zero-dependency static server for local dev (MIME + path safety). Deployed on Vercel as a static site via `vercel.json`.
 - `config.js` — provider, playlist, and drive/scene settings.
 - `src/main.js` — bootstrap + autostart + wake lock + player bar wiring / media session.
 - `src/scene/scene.js` — infinite pseudo-3D road, sky, trees, lamps.

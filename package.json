@@ -5,7 +5,7 @@
   "type": "module",
   "description": "An endless drive and an endless playlist. Open it, click once, leave it running.",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node local-server.js",
+    "dev": "node local-server.js"
   }
 }
