@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>truckplaylist · endless drive</title>
+  <link rel="preconnect" href="https://api.spotify.com" />
+  <link rel="preconnect" href="https://sdk.scdn.co" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <!-- Driver's-wheel vignette overlay -->
+  <div id="vignette" aria-hidden="true"></div>
+
+  <!-- Fade-in blocker -->
+  <div id="curtain" aria-hidden="true"></div>
+
+  <!-- Small status strip (bottom-left). No controls. -->
+  <div id="hud" class="hidden">
+    <div id="hud-track" class="hud-line"></div>
+    <div id="hud-sub" class="hud-line hud-sub"></div>
+    <div id="hud-clock" class="hud-line hud-clock"></div>
+  </div>
+
+  <!-- One-time click-to-start overlay (audio autoplay policy) -->
+  <button id="start" type="button">
+    <span class="start-kicker">turn the key</span>
+    <span class="start-title">ENDLESS DRIVE</span>
+    <span class="start-sub">click once · music takes the wheel</span>
+  </button>
+
+  <div id="error" class="hidden"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

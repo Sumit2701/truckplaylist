@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>shot harness</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body class="running">
+  <canvas id="scene"></canvas>
+  <div id="vignette"></div>
+  <div id="hud">
+    <div id="hud-track" class="hud-line"></div>
+    <div id="hud-sub" class="hud-line hud-sub"></div>
+    <div id="hud-clock" class="hud-line hud-clock"></div>
+  </div>
+  <script type="module">
+    const q = new URLSearchParams(location.search);
+    const { CONFIG } = await import('/config.js');
+    if (q.has('time')) CONFIG.scene.startPhase = Number(q.get('time')) / 24;
+    if (q.has('cabin')) CONFIG.scene.cabin = q.get('cabin') !== '0';
+    const { Scene } = await import('/src/scene/scene.js');
+    const s = new Scene(document.getElementById('scene'), {
+      root: document.getElementById('hud'),
+      track: document.getElementById('hud-track'),
+      sub: document.getElementById('hud-sub'),
+      clock: document.getElementById('hud-clock'),
+    });
+    s.position = Number(q.get('pos') || 0);
+    // Wind the bend/sway state forward so decorations sit where they would
+    // after a few seconds of driving, not at rest.
+    if (q.has('lean')) { s.lean = Number(q.get('lean')); s.wheel = Number(q.get('lean')) * -2; }
+    s.setNowPlaying({ title: 'Tujhe Dekha To', artist: 'Kumar Sanu', album: 'DDLJ' });
+
+    // Frame-rate probe: report average fps over the run.
+    let frames = 0, t0 = performance.now();
+    const tick = () => { frames++; requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    setTimeout(() => {
+      const fps = frames / ((performance.now() - t0) / 1000);
+      document.title = 'fps=' + fps.toFixed(1);
+      console.log('FPS', fps.toFixed(1));
+    }, 2000);
+  </script>
+</body>
+</html>
