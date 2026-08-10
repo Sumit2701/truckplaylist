@@ -18,13 +18,13 @@ const FOV            = 100;
 const CAMERA_HEIGHT  = 1450;                                  // cab is high up
 const CAMERA_DEPTH   = 1 / Math.tan((FOV / 2) * Math.PI / 180);
 const SEGMENT_LENGTH = 200;                                   // world units per segment
-const DRAW_DISTANCE  = 460;                                   // segments drawn ahead
-const SPRITE_DISTANCE = 320;                                  // roadside detail cutoff
+const DRAW_DISTANCE  = 620;                                   // segments drawn ahead
+const SPRITE_DISTANCE = 380;                                  // roadside detail cutoff
 const ROAD_WIDTH     = 2200;                                  // half-width, world units
 const BAND_LENGTH    = 3;                                     // segments per light/dark band
 const TRACK_SEGMENTS = 2400;                                  // loop length
 const PLAYER_X       = -0.40;                                 // left lane, -1..1 across the road
-const FOG_DENSITY    = 1.5;                                   // low: the road runs to the horizon
+const FOG_DENSITY    = 0.5;                                   // low: the road runs to the horizon
 
 const DAY   = CONFIG.scene.dayLength ?? 1200;
 const SPEED = CONFIG.scene.speed ?? 5200;
@@ -137,15 +137,31 @@ export class Scene {
       if (i % 16 === 0) seg.sprites.push({ kind: 'lamp', side: -1, offset: 1.22 });
       if (i % 240 === 120) seg.sprites.push({ kind: 'sign', side: 1, offset: 1.30 });
 
+      // Little roadside shrine with orange prayer flags (jhandi), tucked into
+      // the treeline. Rare, so it's a treat rather than clutter.
+      if (i % 240 === 60) {
+        seg.sprites.push({ kind: 'shrine', side: -1, offset: 1.42 });
+      }
+
+      // Patches of marigolds on the verges, dotting the shoulder like the
+      // familiar roadside trench flowers.
+      if (hash1(i, this.seed + 31) < 0.22) {
+        seg.sprites.push({ kind: 'flowers', idx: i * 7, side: 1, offset: 1.08 + hash1(i, this.seed + 33) * 0.3 });
+      }
+
       // Treeline: a dense near row just past the shoulder, then scattered
-      // depth behind it. Three draws per segment keeps the verge continuous
-      // instead of leaving the gaps that made it look sparse.
-      for (let k = 0; k < 3; k++) {
+      // depth behind it. Four draws per segment keeps the verge continuous
+      // instead of leaving the gaps that made it look sparse. Each tree gets
+      // a species so the roadside is varied instead of one clone repeated.
+      for (let k = 0; k < 4; k++) {
         const r = hash1(i * 4 + k, this.seed);
-        if (r < (k === 0 ? 0.18 : 0.42)) continue;
+        if (r < (k === 0 ? 0.12 : 0.40)) continue;
         const near = k === 0;
+        const sp = (hash1(i * 4 + k, this.seed + 19) * 3) | 0;
         seg.sprites.push({
           kind: 'tree',
+          idx: i * 4 + k,
+          species: sp,
           side: hash1(i * 4 + k, this.seed + 11) > 0.48 ? 1 : -1,
           offset: near ? 1.32 + hash1(i * 4 + k, this.seed + 7) * 0.75
                        : 2.1 + hash1(i * 4 + k, this.seed + 7) * 4.2,
@@ -284,7 +300,7 @@ export class Scene {
     if (CONFIG.scene.cabin !== false) this._drawCabin(ctx, L);
   }
 
-  _haze(n) { return 1 - 1 / Math.exp((n / DRAW_DISTANCE) ** 2 * FOG_DENSITY); }
+  _haze(n) { return 1 - 1 / Math.exp((n / DRAW_DISTANCE) * FOG_DENSITY); }
 
   /** World-space (relative to camera) -> screen. */
   _project(p, camX, camY, camZ) {
@@ -304,6 +320,9 @@ export class Scene {
     const { x: x2, y: y2, w: w2 } = seg.p2.screen;
     const b = seg.band;
     const lit = (c) => mixRgb(mul(c, L.lum), L.fog, haze);
+    // The road itself keeps slightly more contrast than the surroundings so
+    // its outline stays readable all the way to the horizon.
+    const litRoad = (c) => mixRgb(mul(c, L.lum), L.fog, haze * 0.72);
 
     // Grass runs the full width — the road and shoulders paint on top of it.
     ctx.fillStyle = rgb(lit(GRASS[b]));
@@ -316,12 +335,12 @@ export class Scene {
     quad(ctx, rumbleCol, x1 + w1, y1, x1 + w1 + r1, y1, x2 + w2 + r2, y2, x2 + w2, y2);
 
     // Asphalt.
-    quad(ctx, rgb(lit(ROAD[b])), x1 - w1, y1, x1 + w1, y1, x2 + w2, y2, x2 - w2, y2);
+    quad(ctx, rgb(litRoad(ROAD[b])), x1 - w1, y1, x1 + w1, y1, x2 + w2, y2, x2 - w2, y2);
 
     // Solid edge lines, always on.
     const e1 = w1 * 0.035, e2 = w2 * 0.035;
     const i1 = w1 * 0.90, i2 = w2 * 0.90;
-    const paint = rgb(lit(PAINT));
+    const paint = rgb(litRoad(PAINT));
     quad(ctx, paint, x1 - i1 - e1, y1, x1 - i1 + e1, y1, x2 - i2 + e2, y2, x2 - i2 - e2, y2);
     quad(ctx, paint, x1 + i1 - e1, y1, x1 + i1 + e1, y1, x2 + i2 + e2, y2, x2 + i2 - e2, y2);
 
@@ -350,9 +369,25 @@ export class Scene {
     if (L.moon.vis > 0.02) this._drawMoon(ctx, L.moon);
     this._drawMountains(ctx, L);
 
+    // A warm band of dusty heat-haze straddling the horizon — that dry,
+    // hazy Indian afternoon look. Fades out at night so it doesn't fight
+    // the darkness.
+    const dusty = clamp((0.62 - Math.abs(L.ambient - 0.55)) * 1.9, 0, 1)
+                * clamp((55 - (L.sky.low[0] * 0.299 + L.sky.low[1] * 0.587 + L.sky.low[2] * 0.114)) / 70, 0, 1);
+    if (dusty > 0.02) {
+      const hh = this.h * 0.055;
+      const hg = ctx.createLinearGradient(0, this.horizon - hh, 0, this.horizon + hh);
+      const base = mixRgb(mul([214, 178, 130], L.lum), L.fog, 0.25);
+      hg.addColorStop(0, rgba(mixRgb(base, [244, 214, 170], 0.2), 0));
+      hg.addColorStop(0.5, rgba(mixRgb(base, [244, 214, 170], 0.75), 0.6 * dusty));
+      hg.addColorStop(1, rgba(base, 0));
+      ctx.fillStyle = hg;
+      ctx.fillRect(0, this.horizon - hh, this.w, hh * 2);
+    }
+
     // Everything below the vanishing point starts as far-away haze; the road
     // ribbon paints over it from the horizon down.
-    ctx.fillStyle = rgb(mixRgb(mul(GRASS[0], L.lum), L.fog, 0.9));
+    ctx.fillStyle = rgb(mixRgb(mul(GRASS[0], L.lum), L.fog, 0.45));
     ctx.fillRect(0, this.horizon, this.w, this.h - this.horizon);
   }
 
@@ -509,14 +544,73 @@ export class Scene {
       return;
     }
 
+    if (sp.kind === 'shrine') {
+      // A small white shrine under a pole of flags. A classic Indian roadside
+      // sight — the little temple with an orange jhandi poking above the trees.
+      const h = 900 * unit;
+      if (h < 2) return;
+      const sx = x - 240 * unit, sw = 480 * unit, sh = 340 * unit;
+      ctx.fillStyle = rgba(mixRgb(mul([224, 224, 228], dim), L.fog, haze), shade);
+      ctx.fillRect(sx, y - h, sw, h);
+      ctx.fillStyle = rgba(mixRgb(mul([210, 60, 42], dim), L.fog, haze), shade);
+      ctx.fillRect(sx, y - h - 46 * unit, sw, 46 * unit);
+      ctx.fillStyle = rgba(mixRgb(mul([70, 76, 84], dim), L.fog, haze), shade * 0.7);
+      ctx.fillRect(sx + sw * 0.5 - 14 * unit, y - h - sh, 28 * unit, sh);
+      // Little flags of orange, red, saffron strung up the pole.
+      for (let f = 0; f < 4; f++) {
+        const fy = y - h - 180 * unit - f * 150 * unit;
+        const fl = 150 * unit * (0.8 + 0.2 * Math.sin(f * 2.8));
+        const fc = rgba(mixRgb(mul([[235, 96, 32], [216, 52, 56], [244, 178, 40]][f % 3], dim), L.fog, haze), shade);
+        ctx.fillStyle = fc;
+        ctx.beginPath();
+        ctx.moveTo(x, fy);
+        ctx.lineTo(x - fl, fy + 60 * unit);
+        ctx.lineTo(x, fy + 110 * unit);
+        ctx.closePath();
+        ctx.fill();
+      }
+      return;
+    }
+
+    if (sp.kind === 'flowers') {
+      // A scatter of marigold dots right at the verge — cheap to draw and
+      // they break up the solid green edge like in a village.
+      const fh = 520 * unit;
+      if (fh < 2) return;
+      const n = 7;
+      for (let f = 0; f < n; f++) {
+        const fx = x + (hash1(sp.idx, f * 7) - 0.5) * 900 * unit;
+        const fy = y - hash1(sp.idx, f * 7 + 1) * fh;
+        const fr = Math.max(0.6, 60 * unit * (0.6 + hash1(sp.idx, f * 7 + 2) * 0.8));
+        ctx.fillStyle = rgba(mixRgb(mul(hash1(sp.idx, f * 7 + 3) > 0.5 ? [238, 148, 36] : [206, 62, 34], dim * 1.15), L.fog, haze), shade);
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr, 0, TAU);
+        ctx.fill();
+      }
+      return;
+    }
+
     // Tree. There are hundreds on screen, so anything small collapses to a
-    // single triangle — the detailed version only pays off up close.
+    // single triangle — the detailed version only pays off up close. Species
+    // vary the shape and shade:
+    //   0 — round neem/mango, layered and dense
+    //   1 — pointed tall palm/silver oak
+    //   2 — drooping banyan/pipal with a spreading crown
     const trunkH = 1500 * sp.scale * unit;
     if (trunkH < 2) return;
-    const canopyW = 1100 * sp.scale * unit;
-    const green = mixRgb(mul([30, 66, 40], dim), L.fog, haze);
+    const canopyW = (sp.species === 2 ? 1450 : 1120) * sp.scale * unit;
+    const species = sp.species === undefined ? 0 : sp.species;
+    const greens = [
+      [30, 68, 41], [34, 84, 46], [52, 96, 44],   // neem/mango green
+      [40, 82, 38], [48, 96, 40], [64, 106, 44],  // palm/silver-oak sage
+      [24, 58, 36], [38, 76, 40], [60, 90, 38],   // banyan deep green
+    ];
+    const greenT = (hash1(sp.idx, sp.species + 5) * 3) | 0;
+    const green = mixRgb(mul(greens[species * 3 + greenT], dim), L.fog, haze);
+    // Citrus highlight so the canopy reads as living foliage, not flat green.
+    const hi = mixRgb(mul(greens[species * 3 + (greenT + 1) % 3], dim * 1.6), L.fog, haze);
 
-    if (trunkH < 16) {
+    if (trunkH < 18) {
       ctx.fillStyle = rgba(green, shade);
       ctx.beginPath();
       ctx.moveTo(x, y - trunkH * 1.7);
@@ -527,17 +621,51 @@ export class Scene {
       return;
     }
 
-    ctx.fillStyle = rgba(mixRgb(mul([56, 40, 26], dim), L.fog, haze), shade);
+    ctx.fillStyle = rgba(mixRgb(mul([58, 40, 26], dim), L.fog, haze), shade);
     ctx.fillRect(x - trunkH * 0.05, y - trunkH, trunkH * 0.10, trunkH);
     ctx.fillStyle = rgba(green, shade);
-    for (let t = 0; t < 3; t++) {
-      const ty = y - trunkH * (0.55 + t * 0.30);
-      const tw = canopyW * (1 - t * 0.24);
+
+    if (species === 1) {
+      // Tall palm/silver oak — slender trunk, relaxed crown of fans.
+      const crownW = canopyW * 1.35;
       ctx.beginPath();
-      ctx.moveTo(x, ty - trunkH * 0.62);
-      ctx.lineTo(x - tw, ty);
-      ctx.lineTo(x + tw, ty);
+      ctx.moveTo(x, y - trunkH * 1.35);
+      ctx.quadraticCurveTo(x - crownW, y - trunkH * 0.9, x - crownW, y - trunkH * 0.55);
+      ctx.lineTo(x, y - trunkH * 0.9);
+      ctx.lineTo(x + crownW, y - trunkH * 0.55);
+      ctx.quadraticCurveTo(x + crownW, y - trunkH * 0.9, x, y - trunkH * 1.35);
       ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = rgba(hi, shade);
+      ctx.beginPath();
+      ctx.arc(x - canopyW * 0.42, y - trunkH * 0.82, canopyW * 0.42, 0, TAU);
+      ctx.arc(x + canopyW * 0.42, y - trunkH * 0.80, canopyW * 0.38, 0, TAU);
+      ctx.fill();
+      return;
+    }
+
+    // Round (0) or spreading (2) crown, built from overlapping lobes so the
+    // silhouette is soft instead of a hard triangle.
+    const lobes = species === 2 ? 7 : 5;
+    const topY = y - trunkH * (species === 2 ? 1.22 : 1.45);
+    const spread = species === 2 ? 1.16 : 1.0;
+    for (let l = 0; l < lobes; l++) {
+      const a = (l / lobes) * Math.PI + (species === 2 ? 0.35 : 0.15);
+      const lx = x + Math.cos(a) * canopyW * 0.52 * spread;
+      const ly = topY + Math.sin(a) * canopyW * 0.5;
+      const rad = canopyW * (0.5 + 0.16 * Math.sin(l * 2.7));
+      ctx.beginPath();
+      ctx.arc(lx, ly, rad, 0, TAU);
+      ctx.fill();
+    }
+    // A lighter up-facing lobe for depth.
+    ctx.fillStyle = rgba(hi, shade * 0.8);
+    for (let l = 1; l <= 3; l++) {
+      const a = (l / 4) * Math.PI - 0.3;
+      const lx = x + Math.cos(a) * canopyW * 0.34 * spread;
+      const ly = topY + Math.sin(a) * canopyW * 0.4;
+      ctx.beginPath();
+      ctx.arc(lx, ly, canopyW * (0.34 - l * 0.05), 0, TAU);
       ctx.fill();
     }
   }
