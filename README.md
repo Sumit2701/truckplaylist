@@ -1,8 +1,9 @@
 # truckplaylist · endless drive
 
-An infinite, driver's-POV highway. Open it, click the key, and let a playlist
-take the wheel. **There are no controls** — the drive and the music run
-themselves while you watch the road scroll under a living day/night sky.
+An infinite, driver's-POV highway and playlist that start the moment you open
+the page. A docked, music-app-style player bar gives you previous / next / pause,
+a scrubber to seek, and a volume slider — so you can drive the mix your way while
+the road scrolls under a living day/night sky.
 
 ## Run
 
@@ -10,8 +11,9 @@ themselves while you watch the road scroll under a living day/night sky.
 npm start        # -> http://localhost:5173
 ```
 
-Click the screen once (browsers require a gesture before audio can start).
-After that it plays forever with a screen wake-lock so it won't sleep.
+Audio starts automatically on load (no click needed). If a browser blocks
+autoplay, a "tap anywhere" hint appears — one tap starts it. After that it plays
+forever with a screen wake-lock so it won't sleep.
 
 ## Music source
 
@@ -45,8 +47,8 @@ clean full-screen road.
 
 - `server.js` — zero-dependency static server (MIME + path safety).
 - `config.js` — provider, playlist, and drive/scene settings.
-- `src/main.js` — bootstrap + autostart + wake lock.
+- `src/main.js` — bootstrap + autostart + wake lock + player bar wiring / media session.
 - `src/scene/scene.js` — infinite pseudo-3D road, sky, trees, lamps.
-- `src/audio/player.js` — YouTube & Spotify sources (no controls).
+- `src/audio/player.js` — YouTube & Spotify sources + transport (play/pause, prev/next, seek).
 - `src/lib/util.js` — math/colour helpers.
-- `index.html` / `style.css` — UI shell and HUD.
+- `index.html` / `style.css` — UI shell, HUD and docked player bar.

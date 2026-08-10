@@ -18,19 +18,35 @@
   <!-- Fade-in blocker -->
   <div id="curtain" aria-hidden="true"></div>
 
-  <!-- Small status strip (bottom-left). No controls. -->
-  <div id="hud" class="hidden">
-    <div id="hud-track" class="hud-line"></div>
-    <div id="hud-sub" class="hud-line hud-sub"></div>
-    <div id="hud-clock" class="hud-line hud-clock"></div>
+  <!-- Music-app style player bar (docked, controls) -->
+  <div id="bar" aria-label="Player">
+    <div class="bar-top">
+      <div class="bar-meta">
+        <div id="bar-track">Drive mix</div>
+        <div id="bar-artist">truckplaylist</div>
+      </div>
+      <div class="bar-controls">
+        <button id="ctrl-prev" type="button" aria-label="Previous">&#9198;</button>
+        <button id="ctrl-play" type="button" aria-label="Pause" class="playing" aria-pressed="true">
+          <svg class="ic ic-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+          <svg class="ic ic-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        </button>
+        <button id="ctrl-next" type="button" aria-label="Next">&#9197;</button>
+      </div>
+      <label class="bar-volume" aria-label="Volume">
+        <span id="vol-icon">&#128266;</span>
+        <input id="ctrl-volume" type="range" min="0" max="100" step="1" value="55" />
+      </label>
+    </div>
+    <div class="bar-seek">
+      <span id="bar-time">0:00</span>
+      <div id="seek" role="slider" aria-label="Seek" tabindex="0"></div>
+      <span id="bar-dur">0:00</span>
+    </div>
   </div>
 
-  <!-- One-time click-to-start overlay (audio autoplay policy) -->
-  <button id="start" type="button">
-    <span class="start-kicker">turn the key</span>
-    <span class="start-title">ENDLESS DRIVE</span>
-    <span class="start-sub">click once · music takes the wheel</span>
-  </button>
+  <!-- Tap to start (only shows if the browser blocks audio autoplay) -->
+  <div id="tap-hint"><span class="tp-kicker">tap anywhere</span></div>
 
   <div id="error" class="hidden"></div>
 

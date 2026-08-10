@@ -75,10 +75,9 @@ function hillAt(i) {
 }
 
 export class Scene {
-  constructor(canvas, hud) {
+  constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
-    this.hud = hud;                     // { root, track, sub, clock }
     this.w = 0; this.h = 0;
     this.t = 0; this.tms = 0;
     this.phase = CONFIG.scene.startPhase ?? 0.3;
@@ -224,30 +223,9 @@ export class Scene {
     this.wheel += (clamp(curve * 0.20, -0.85, 0.85) - this.wheel) * Math.min(1, dt * 3);
 
     this.render();
-    this._updateHud();
   }
 
   setHidden(v) { this.hidden = v; }
-  showHud() { this.hud.root.classList.remove('hidden'); }
-
-  _updateHud() {
-    if (!this.hud) return;
-    const hours = (this.phase * 24) % 24;   // phase 0.25 = 06:00 = sunrise
-    const hh = String(Math.floor(hours)).padStart(2, '0');
-    const mm = String(Math.floor((hours % 1) * 60)).padStart(2, '0');
-    this.hud.clock.textContent = `${hh}:${mm}`;
-  }
-
-  setNowPlaying({ title, artist, album }) {
-    if (!this.hud) return;
-    if (title) {
-      this.hud.track.innerHTML = `<span class="dot"></span>${esc(title)}`;
-      this.hud.sub.innerHTML = `${esc(artist)}<span class="sep">·</span>${esc(album)}`;
-    } else {
-      this.hud.track.innerHTML = `<span class="dot"></span>driving…`;
-      this.hud.sub.innerHTML = `truckplaylist`;
-    }
-  }
 
   // --- render ------------------------------------------------------------------
   render() {

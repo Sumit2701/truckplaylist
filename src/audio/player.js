@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------------------
-// Music source. No controls — the drive just plays.
+// Music source. Streams a playlist like a dedicated music player, with
+// play/pause, previous/next and a progress ticker.
 //
 // YouTube is the zero-setup default (works with no account/API key).
 // Spotify requires: config.js -> provider:'spotify' + a clientId + a one-time
@@ -7,7 +8,7 @@
 // ---------------------------------------------------------------------------
 import { CONFIG } from '../../config.js';
 
-let player = null;      // current impl ({play, setVolume, meta, onMeta})
+let player = null;      // current impl ({start, resume, ...player controls})
 let onMeta = null;      // callback the scene uses to show now-playing
 let onError = null;
 let started = false;
@@ -16,11 +17,9 @@ export function initPlayer({ ready, meta, error }) {
   onMeta = meta;
   onError = error;
   const provider = CONFIG.provider;
-  if (provider === 'spotify') {
-    player = createSpotify({ ready, meta, error });
-  } else {
-    player = createYoutube({ ready, meta, error });
-  }
+  player = provider === 'spotify'
+    ? createSpotify({ ready, meta, error })
+    : createYoutube({ ready, meta, error });
   return player;
 }
 
@@ -37,14 +36,26 @@ export function setVolume(v) {
 
 export function getPlayer() { return player; }
 
+export function nextTrack()   { player && player.next   && player.next(); }
+export function prevTrack()   { player && player.prev   && player.prev(); }
+export function togglePause() { player && player.togglePause && player.togglePause(); }
+export function seekTo(frac)  { player && player.seekTo  && player.seekTo(frac); }
+export async function getStatus() {
+  if (!player || !player.getStatus) return { playing: false };
+  return player.getStatus();
+}
+
 // --- YouTube (default) ------------------------------------------------------
 
 function createYoutube({ ready, meta, error }) {
   const state = {
-    apiReady: false,
     iframe: null,
     nextResume: null,
     volume: (CONFIG.youtube?.volume ?? 55) / 100,
+    playing: false,
+    title: '',
+    artist: '',
+    album: 'endless drive',
   };
 
   function loadApi() {
@@ -90,15 +101,36 @@ function createYoutube({ ready, meta, error }) {
           ready();
         },
         onStateChange: (e) => {
-          if (e.data === YT.PlayerState.PLAYING) {
+          state.playing = e.data === YT.PlayerState.PLAYING;
+          if (state.playing) {
             const t = p.getVideoData && p.getVideoData();
-            meta({ title: t?.title || 'Drive mix', artist: t?.author || 'YouTube', album: 'endless drive' });
+            state.title = t?.title || 'Drive mix';
+            state.artist = t?.author || 'YouTube';
+            meta({ title: state.title, artist: state.artist, album: state.album });
           }
         },
         onError: () => error('YouTube playback failed. Check playlistId or try again.'),
       },
     });
     state.iframe = p;
+  }
+
+  function getStatus() {
+    const p = state.iframe;
+    let currentTime = 0, duration = 0, index = 0, count = 0;
+    try {
+      if (p) {
+        currentTime = p.getCurrentTime?.() || 0;
+        duration   = p.getDuration?.()   || 0;
+        index      = p.getPlaylistIndex?.() || 0;
+        const pl  = p.getPlaylist?.();
+        count      = pl?.length || 0;
+      }
+    } catch { /* player not ready yet */ }
+    return {
+      title: state.title, artist: state.artist, album: state.album,
+      playing: state.playing, currentTime, duration, index, count,
+    };
   }
 
   return {
@@ -112,8 +144,17 @@ function createYoutube({ ready, meta, error }) {
       }
     },
     resume: () => state.iframe?.playVideo(),
+    next: () => state.iframe?.nextVideo?.(),
+    prev: () => state.iframe?.previousVideo?.(),
+    togglePause: () => state.playing ? state.iframe?.pauseVideo?.() : state.iframe?.playVideo?.(),
+    seekTo: (frac) => {
+      const p = state.iframe;
+      if (!p) return;
+      const d = p.getDuration?.() || 0;
+      if (d) p.seekTo?.(d * frac, true);
+    },
     setVolume,
-    get meta() { return null; },
+    getStatus,
     get kind() { return 'youtube'; },
   };
 }
@@ -127,7 +168,6 @@ function createSpotify({ ready, meta, error }) {
     token: null,
     sdk: null,
     volume: cfg.volume ?? 0.55,
-    pendingPlay: false,
   };
 
   function showAuth() {
@@ -243,12 +283,7 @@ function createSpotify({ ready, meta, error }) {
         resolve();
       });
       state.sdk.addListener('not_ready', () => {});
-      state.sdk.addListener('player_state_changed', (s) => {
-        if (s && s.track_window && s.track_window.current_track) {
-          const t = s.track_window.current_track;
-          meta({ title: t.name, artist: t.artists?.map(a => a.name).join(', ') || 'Spotify', album: t.album?.name || 'endless drive' });
-        }
-      });
+      state.sdk.addListener('player_state_changed', (_s) => { /* status read in ticker */ });
       state.sdk.addListener('initialization_error', (e) => reject(new Error(e.message)));
       state.sdk.addListener('authentication_error', () => reject(new Error('auth rejected')));
       state.sdk.connect().catch(reject);
@@ -271,7 +306,30 @@ function createSpotify({ ready, meta, error }) {
   return {
     start,
     resume: () => state.sdk?.resume(),
+    next: () => state.sdk?.nextTrack?.(),
+    prev: () => state.sdk?.previousTrack?.(),
+    togglePause: () => state.sdk?.togglePlay?.(),
+    seekTo: async (frac) => {
+      const s = await state.sdk?.getCurrentState?.();
+      const dur = (s && s.duration) || 0;
+      if (dur) state.sdk?.seek?.(Math.floor(dur * frac));
+    },
     setVolume: (v) => { state.volume = v; state.sdk?.setVolume(v); },
+    getStatus: async () => {
+      const s = await state.sdk?.getCurrentState?.();
+      if (!s) return { playing: false, title: '', artist: '', album: '', currentTime: 0, duration: 0, index: 0, count: 0 };
+      const t = s.track_window?.current_track;
+      return {
+        title: t?.name || 'Drive mix',
+        artist: t?.artists?.map(a => a.name).join(', ') || 'Spotify',
+        album: t?.album?.name || 'endless drive',
+        playing: !s.paused,
+        currentTime: (s.position || 0) / 1000,
+        duration: (s.duration || 0) / 1000,
+        index: s.track_window?.previous_tracks?.length || 0,
+        count: 0,
+      };
+    },
     get kind() { return 'spotify'; },
   };
 }
