@@ -218,7 +218,7 @@ export class Scene {
     // the frame rate.
     const curve = this.segAt(Math.floor((this.position + this.playerZ) / SEGMENT_LENGTH)).curve;
     const segsPerSec = SPEED * dt / SEGMENT_LENGTH;
-    this.skyDrift -= curve * segsPerSec * 3.2;
+    this.skyDrift += curve * segsPerSec * 3.2;
     this.lean += (clamp(-curve * 0.085, -0.45, 0.45) - this.lean) * Math.min(1, dt * 2.4);
     this.wheel += (clamp(curve * 0.20, -0.85, 0.85) - this.wheel) * Math.min(1, dt * 3);
 
