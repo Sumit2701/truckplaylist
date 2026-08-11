@@ -23,6 +23,11 @@ applyOverrides();
 const canvas = document.getElementById('scene');
 const curtain = document.getElementById('curtain');
 const err = document.getElementById('error');
+const live = {
+  root: document.getElementById('live-count'),
+  dot: document.getElementById('live-dot'),
+  num: document.getElementById('live-num'),
+};
 
 // --- player bar (music-app style controls, bottom center) ---------------------
 const bar = {
@@ -41,6 +46,55 @@ const bar = {
 };
 
 const scene = new Scene(canvas);
+
+// --- live presence -----------------------------------------------------------
+// Pings the Node server every few seconds with a persistent session id and
+// shows a small "N online" badge. On a static host (no /api/presence) this
+// quietly hides itself.
+(function startPresence() {
+  if (!live.root) return;
+  const SESSION_KEY = 'truckplaylist/session';
+  let sid = null;
+  try { sid = localStorage.getItem(SESSION_KEY); } catch { /* private mode */ }
+  if (!sid) {
+    sid = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)) +
+          Date.now().toString(36);
+    try { localStorage.setItem(SESSION_KEY, sid); } catch { /* ignore */ }
+  }
+
+  let alive = false;
+  let timer = null;
+
+  async function ping() {
+    try {
+      const res = await fetch(`/api/presence?id=${encodeURIComponent(sid)}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('bad status');
+      const data = await res.json();
+      if (!alive) {
+        alive = true;
+        live.root.classList.remove('hidden');
+      }
+      live.num.textContent = String(data.online);
+    } catch {
+      // No presence endpoint — stop trying and hide the badge.
+      if (alive) live.root.classList.add('hidden');
+      clearInterval(timer);
+    }
+  }
+
+  timer = setInterval(ping, 5000);
+  ping();
+
+  // Heartbeat as soon as the tab regains focus so the count stays accurate.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') ping();
+  });
+
+  window.addEventListener('beforeunload', () => {
+    // Best-effort: tell the server this session is gone. Fire-and-forget.
+    try { navigator.sendBeacon('/api/presence?leave=1&id=' + encodeURIComponent(sid)); } catch { /* ignore */ }
+  });
+})();
 
 function showError(msg) {
   err.textContent = msg;

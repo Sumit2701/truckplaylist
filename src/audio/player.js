@@ -74,13 +74,32 @@ function createYoutube({ ready, meta, error }) {
 
   function setVolume(v) { state.volume = v; state.iframe?.setVolume(v * 100); }
 
+  // Shuffle only takes effect once the playlist has actually loaded, which
+  // happens a beat after onReady — so poll briefly for it, then jump to a
+  // random entry so every visit opens on a different song.
+  function shuffleOnce(p) {
+    if (CONFIG.youtube?.shuffle === false) return;
+    let tries = 0;
+    const tick = () => {
+      const list = p.getPlaylist?.();
+      if (list && list.length > 1) {
+        p.setShuffle?.(true);
+        p.playVideoAt?.(Math.floor(Math.random() * list.length));
+        return;
+      }
+      if (tries++ < 40) setTimeout(tick, 150);
+    };
+    tick();
+  }
+
   function buildIframe() {
     const id = document.createElement('div');
     id.style.display = 'none';
     document.body.appendChild(id);
     const p = new YT.Player(id, {
       width: 1, height: 1,
-      videoId: 'M9CkNhdqyCI', // placeholder song; replaced by playlist
+      // No videoId on purpose: passing one makes the player open on that exact
+      // song every time before falling through to the playlist.
       playerVars: {
         listType: 'playlist',
         list: CONFIG.youtube.playlistId,
@@ -97,6 +116,7 @@ function createYoutube({ ready, meta, error }) {
         onReady: () => {
           p.setVolume(state.volume * 100);
           p.setLoop(true);
+          shuffleOnce(p);
           if (state.nextResume) { state.nextResume(); state.nextResume = null; }
           ready();
         },
@@ -229,7 +249,7 @@ function createSpotify({ ready, meta, error }) {
         redirect_uri: cfg.redirectUri,
         code_challenge_method: 'S256',
         code_challenge: ch,
-        scope: 'streaming user-read-email user-read-private playlist-read-private',
+        scope: 'streaming user-read-email user-read-private playlist-read-private user-modify-playback-state',
       });
       location.href = 'https://accounts.spotify.com/authorize?' + q.toString();
     });
@@ -292,6 +312,14 @@ function createSpotify({ ready, meta, error }) {
 
   async function play() {
     const uri = cfg.playlistUri || 'spotify:playlist:37i9dQZF1DX3Ogo9pFvBkY';
+    if (cfg.shuffle !== false) {
+      // Set before starting the context so playback begins on a random track.
+      const sq = new URLSearchParams({ device_id: state.deviceId, state: 'true' });
+      await fetch('https://api.spotify.com/v1/me/player/shuffle?' + sq, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + state.token },
+      }).catch(() => { /* non-fatal: fall through and just play */ });
+    }
     const q = new URLSearchParams({ device_id: state.deviceId, context_uri: uri });
     const res = await fetch('https://api.spotify.com/v1/me/player/play?' + q, {
       method: 'PUT',

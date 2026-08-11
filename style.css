@@ -105,6 +105,35 @@ body.running #curtain { opacity: 0; }
   box-shadow: 0 0 8px var(--amber);
 }
 
+/* Live presence pill — top-right corner */
+#live-count {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: linear-gradient(180deg, rgba(10, 14, 26, 0.5), rgba(6, 8, 16, 0.3));
+  border: 1px solid rgba(219, 228, 255, 0.10);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+#live-count .dot {
+  margin: 0;
+  width: 7px;
+  height: 7px;
+}
+#live-count.hidden { display: none; }
+
 /* --- Docked music-app player bar ----------------------------------------- */
 #bar {
   position: fixed;

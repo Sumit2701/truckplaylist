@@ -48,6 +48,13 @@
   <!-- Tap to start (only shows if the browser blocks audio autoplay) -->
   <div id="tap-hint"><span class="tp-kicker">tap anywhere</span></div>
 
+  <!-- Live presence badge (hidden when the server has no presence endpoint) -->
+  <div id="live-count" class="hidden" aria-live="polite">
+    <span id="live-dot" class="dot"></span>
+    <span id="live-num">0</span>
+    <span>online</span>
+  </div>
+
   <div id="error" class="hidden"></div>
 
   <script type="module" src="/src/main.js"></script>
