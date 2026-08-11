@@ -133,7 +133,7 @@ function setPlayIcon(playing) {
   bar.play.setAttribute('aria-label', playing ? 'Pause' : 'Play');
 }
 
-let lastStatus = { playing: false, title: '', duration: 0 };
+let lastStatus = { playing: false, muted: false, title: '', duration: 0 };
 
 function tick() {
   (async () => {
@@ -147,6 +147,7 @@ function tick() {
       updateBar(s);
     }
     if (s.playing !== prev.playing) setPlayIcon(s.playing);
+    if (s.muted !== prev.muted || s.playing !== prev.playing) updateHint(s);
     if (bar.time) bar.time.textContent = fmt(s.currentTime);
     if (bar.dur) bar.dur.textContent = s.duration > 0 ? fmt(s.duration) : '0:00';
     if (bar.seek) {
@@ -208,14 +209,30 @@ async function begin() {
 // simply stay paused until the user taps anywhere — that tap also resumes music.
 begin();
 
-// When audio managed to autoplay, hide the tap hint after a short grace period.
-setTimeout(() => {
-  if (bar.hint && (lastStatus.playing || (player && player.kind))) bar.hint.style.opacity = '0';
-}, 2500);
-setTimeout(() => { if (bar.hint) bar.hint.remove(); }, 7000);
+// The drive always starts on its own; the only thing a browser can withhold is
+// sound. So the hint appears purely when we're playing muted, and any gesture
+// (move, scroll, key, tap) lifts it — see armAutoUnmute() in the player.
+function updateHint(s) {
+  if (!bar.hint) return;
+  if (s.muted) {
+    const kicker = bar.hint.querySelector('.tp-kicker');
+    if (kicker) kicker.textContent = 'move or tap for sound';
+    bar.hint.style.opacity = '1';
+  } else if (s.playing) {
+    bar.hint.style.opacity = '0';
+    setTimeout(() => {
+      if (!bar.hint || lastStatus.muted) return;
+      bar.hint.remove();
+      bar.hint = null;
+    }, 1400);
+  }
+}
 
-// On browsers that blocked audio autoplay, a tap anywhere starts the drive.
-// Once playing, taps outside the player bar leave the music alone (title/art).
+// Hide the hint until we actually know sound was blocked, so a normal start
+// never flashes it.
+if (bar.hint) bar.hint.style.opacity = '0';
+
+// Safety net: if the player never came up at all, a tap still kicks it off.
 window.addEventListener('click', (ev) => {
   const inBar = ev.target.closest && ev.target.closest('#bar');
   if (!inBar && !lastStatus.playing) startMusic();

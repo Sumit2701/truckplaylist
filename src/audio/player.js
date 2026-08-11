@@ -53,6 +53,8 @@ function createYoutube({ ready, meta, error }) {
     nextResume: null,
     volume: (CONFIG.youtube?.volume ?? 55) / 100,
     playing: false,
+    muted: false,
+    armed: false,
     title: '',
     artist: '',
     album: 'endless drive',
@@ -92,6 +94,46 @@ function createYoutube({ ready, meta, error }) {
     tick();
   }
 
+  // Browsers refuse to autoplay *audible* media until the visitor has some
+  // history of interacting with the site. Muted autoplay is always allowed, so
+  // when the audible attempt is refused we keep the music rolling muted and
+  // lift the mute on the first gesture of any kind — no start button to click.
+  const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'wheel', 'mousemove', 'scroll'];
+
+  function armAutoUnmute() {
+    if (state.armed) return;
+    state.armed = true;
+    const opts = { capture: true, passive: true };
+    const onGesture = () => {
+      const p = state.iframe;
+      if (!p) return;
+      p.unMute?.();
+      p.setVolume?.(state.volume * 100);
+      p.playVideo?.();
+      // The browser can still refuse; only stand down once it really unmuted.
+      setTimeout(() => {
+        if (p.isMuted?.()) return;
+        state.muted = false;
+        state.armed = false;
+        GESTURES.forEach((e) => window.removeEventListener(e, onGesture, opts));
+      }, 150);
+    };
+    GESTURES.forEach((e) => window.addEventListener(e, onGesture, opts));
+  }
+
+  // If audible autoplay was blocked the player just sits there unstarted —
+  // catch that and restart it muted so the drive never opens in silence.
+  function ensurePlaying(p) {
+    setTimeout(() => {
+      const s = p.getPlayerState?.();
+      if (s === YT.PlayerState.PLAYING || s === YT.PlayerState.BUFFERING) return;
+      p.mute?.();
+      state.muted = true;
+      p.playVideo?.();
+      armAutoUnmute();
+    }, 1200);
+  }
+
   function buildIframe() {
     const id = document.createElement('div');
     id.style.display = 'none';
@@ -117,6 +159,8 @@ function createYoutube({ ready, meta, error }) {
           p.setVolume(state.volume * 100);
           p.setLoop(true);
           shuffleOnce(p);
+          p.playVideo?.();
+          ensurePlaying(p);
           if (state.nextResume) { state.nextResume(); state.nextResume = null; }
           ready();
         },
@@ -149,7 +193,7 @@ function createYoutube({ ready, meta, error }) {
     } catch { /* player not ready yet */ }
     return {
       title: state.title, artist: state.artist, album: state.album,
-      playing: state.playing, currentTime, duration, index, count,
+      playing: state.playing, muted: state.muted, currentTime, duration, index, count,
     };
   }
 
